@@ -42,14 +42,9 @@ public class PedidoComida extends Pedido {
         super.asignarRepartidor(candidato);
     }
 
-    public void asignarRepartidor(Repartidor candidato, String criterioAsignacion) {
-        System.out.println("[Protocolo Comida] Evaluando candidato bajo el criterio especial: " + criterioAsignacion);
-
-        if (criterioAsignacion.equalsIgnoreCase("Prioridad Alta")) {
-            System.out.println(" -> Notificación: Se requiere despacho inmediato para mantener la temperatura óptima.");
-        }
-
-        super.asignarRepartidor(candidato);
+    public void asignarRepartidor(String nombre) {
+        System.out.println("[Protocolo Comida] Registrando asignación de emergencia por nombre: " + nombre);
+        super.asignarRepartidor(nombre);
     }
 
     @Override
@@ -72,5 +67,25 @@ public class PedidoComida extends Pedido {
             sb.append("\n   -> Repartidor a cargo: Pendiente de asignación");
         }
         return sb.toString();
+    }
+
+    // =========================================================
+    // SOBREESCRITURA DE LA INTERFAZ PARA EXCEPCIÓN DE NEGOCIO
+    // =========================================================
+    @Override
+    public Repartidor cancelar(String motivo) {
+        this.estadoCancelado = true;
+        this.motivoCancelacion = motivo;
+
+        Repartidor liberado = this.repartidorAsignado;
+        this.repartidorAsignado = null; // Lo desvinculamos del sándwich
+
+        if (liberado != null) {
+            System.out.println("-> [EXCEPCIÓN COMIDA] Pedido en ruta cancelado. Repartidor recuperado.");
+        } else {
+            System.out.println("-> Pedido " + this.getIdPedido() + " cancelado exitosamente antes de despacho.");
+        }
+
+        return liberado; // Devolvemos el recurso al Main
     }
 }

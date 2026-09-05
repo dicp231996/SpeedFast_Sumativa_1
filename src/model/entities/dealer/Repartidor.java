@@ -31,6 +31,16 @@ public class Repartidor extends Persona {
         this.estaCercaUbicacion = estaCercaUbicacion;
     }
 
+    // =========================================================
+    // MÉTODO AÑADIDO PARA COMPATIBILIDAD CON SPEEDFAST (MAIN)
+    // =========================================================
+    public String getTelefono() {
+        // Llama al getter de la clase Persona.
+        // Nota: Si en tu clase Persona el getter se llama diferente (ej: getTelefonoContacto()),
+        // debes cambiar el nombre de este retorno para que coincida.
+        return super.getTelefonoContacto();
+    }
+
     // Getters
     public TipoServicio getTipoServicio() {
         return tipoServicio;

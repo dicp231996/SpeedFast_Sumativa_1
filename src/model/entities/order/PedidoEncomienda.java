@@ -54,16 +54,9 @@ public class PedidoEncomienda extends Pedido {
         super.asignarRepartidor(candidato);
     }
 
-    public void asignarRepartidor(Repartidor candidato, String criterioAsignacion) {
-        System.out.println("[Protocolo Encomienda] Evaluando candidato bajo el criterio especial: " + criterioAsignacion);
-
-        if (criterioAsignacion.equalsIgnoreCase("Frágil")) {
-            System.out.println(" -> Notificación: Se requiere estiba cuidadosa y evitar apilamiento superior.");
-        } else if (criterioAsignacion.equalsIgnoreCase("Valor Declarado")) {
-            System.out.println(" -> Notificación: El paquete requiere firma de recepción y seguro de ruta.");
-        }
-
-        super.asignarRepartidor(candidato);
+    public void asignarRepartidor(String nombre) {
+        System.out.println("[Protocolo Comida] Registrando asignación de emergencia por nombre: " + nombre);
+        super.asignarRepartidor(nombre);
     }
 
     @Override
