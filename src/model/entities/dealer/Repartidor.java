@@ -1,93 +1,112 @@
 package model.entities.dealer;
 
 import data.enumerate.TipoServicio;
+import model.core.Pedido;
 import model.core.Persona;
+import model.interfaces.IRunnable;
 
-// Clase Repartidor que hereda de Persona
-public class Repartidor extends Persona {
+import java.util.ArrayList;
 
-    // Atributos propios del repartidor
+// Clase Repartidor hereda de Persona e implementa tanto tu interfaz como la nativa de Java
+public class Repartidor extends Persona implements IRunnable, Runnable {
+
     private TipoServicio tipoServicio;
     private boolean tieneMochilaTermica;
     private double capacidadPesoMax;
     private boolean estaCercaUbicacion;
+    private ArrayList<Pedido> pedidosAsignados;
 
-    // Constructor por defecto
     public Repartidor() {
-        super(); // Llama al constructor de Persona (asigna "No especificado")
+        super();
         this.tipoServicio = TipoServicio.COMIDA;
         this.tieneMochilaTermica = false;
         this.capacidadPesoMax = 0.0;
         this.estaCercaUbicacion = false;
+        this.pedidosAsignados = new ArrayList<>();
     }
 
-    // Constructor con todos los atributos
     public Repartidor(String nombreCompleto, String telefonoContacto, TipoServicio tipoServicio,
                       boolean tieneMochilaTermica, double capacidadPesoMax, boolean estaCercaUbicacion) {
-        super(nombreCompleto, telefonoContacto); // Inicializa los datos heredados
+        super(nombreCompleto, telefonoContacto);
         this.tipoServicio = tipoServicio;
         this.tieneMochilaTermica = tieneMochilaTermica;
         this.capacidadPesoMax = capacidadPesoMax;
         this.estaCercaUbicacion = estaCercaUbicacion;
+        this.pedidosAsignados = new ArrayList<>();
     }
 
     // =========================================================
-    // MÉTODO AÑADIDO PARA COMPATIBILIDAD CON SPEEDFAST (MAIN)
+    // IMPLEMENTACIÓN SECUENCIAL (UN PEDIDO A LA VEZ)
     // =========================================================
+    @Override
+    public void run() {
+        System.out.println("\n>>> [EN RUTA] El repartidor " + this.getNombreCompleto() + " inicia su recorrido secuencial.");
+
+        if (this.pedidosAsignados.isEmpty()) {
+            System.out.println("    -> No hay pedidos asignados en la mochila.");
+            return;
+        }
+
+        for (Pedido pedido : this.pedidosAsignados) {
+            if (!pedido.isCancelado()) {
+                // Al invocar .run() directamente sobre HiloEntrega, bloqueamos este ciclo for
+                // obligando a que se terminen las 4 etapas del pedido actual antes de pasar al siguiente.
+                new model.valueobjects.HiloEntrega(pedido).run();
+            } else {
+                System.out.println("    -> Omitiendo pedido ID: " + pedido.getIdPedido() + " (Se encuentra CANCELADO).");
+            }
+        }
+
+        System.out.println("\n>>> [FIN DE RUTA] " + this.getNombreCompleto() + " ha finalizado su recorrido y liberado su carga.\n");
+        this.limpiarPedidos();
+    }
+
+    // =========================================================
+    // GESTIÓN DE LA LISTA DE PEDIDOS
+    // =========================================================
+    public ArrayList<Pedido> getPedidosAsignados() {
+        return pedidosAsignados;
+    }
+
+    public void agregarPedido(Pedido pedido) {
+        this.pedidosAsignados.add(pedido);
+    }
+
+    public void removerPedido(Pedido pedido) {
+        this.pedidosAsignados.remove(pedido);
+    }
+
+    public void limpiarPedidos() {
+        this.pedidosAsignados.clear();
+    }
+
+    // Puente para evitar errores de visibilidad en el Main
     public String getTelefono() {
-        // Llama al getter de la clase Persona.
-        // Nota: Si en tu clase Persona el getter se llama diferente (ej: getTelefonoContacto()),
-        // debes cambiar el nombre de este retorno para que coincida.
         return super.getTelefonoContacto();
     }
 
     // Getters
-    public TipoServicio getTipoServicio() {
-        return tipoServicio;
-    }
-
-    public boolean isTieneMochilaTermica() {
-        return tieneMochilaTermica;
-    }
-
-    public double getCapacidadPesoMax() {
-        return capacidadPesoMax;
-    }
-
-    public boolean isEstaCercaUbicacion() {
-        return estaCercaUbicacion;
-    }
+    public TipoServicio getTipoServicio() { return tipoServicio; }
+    public boolean isTieneMochilaTermica() { return tieneMochilaTermica; }
+    public double getCapacidadPesoMax() { return capacidadPesoMax; }
+    public boolean isEstaCercaUbicacion() { return estaCercaUbicacion; }
 
     // Setters
-    public void setTipoServicio(TipoServicio tipoServicio) {
-        this.tipoServicio = tipoServicio;
-    }
+    public void setTipoServicio(TipoServicio tipoServicio) { this.tipoServicio = tipoServicio; }
+    public void setTieneMochilaTermica(boolean tieneMochilaTermica) { this.tieneMochilaTermica = tieneMochilaTermica; }
+    public void setCapacidadPesoMax(double capacidadPesoMax) { this.capacidadPesoMax = capacidadPesoMax; }
+    public void setEstaCercaUbicacion(boolean estaCercaUbicacion) { this.estaCercaUbicacion = estaCercaUbicacion; }
 
-    public void setTieneMochilaTermica(boolean tieneMochilaTermica) {
-        this.tieneMochilaTermica = tieneMochilaTermica;
-    }
-
-    public void setCapacidadPesoMax(double capacidadPesoMax) {
-        this.capacidadPesoMax = capacidadPesoMax;
-    }
-
-    public void setEstaCercaUbicacion(boolean estaCercaUbicacion) {
-        this.estaCercaUbicacion = estaCercaUbicacion;
-    }
-
-    // Método toString sobrescrito utilizando StringBuilder
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-
-        // Se llama al toString() de Persona y se añaden los datos del Repartidor
         sb.append(super.toString())
                 .append("\n   -> Perfil Operativo:")
                 .append("\n      | Tipo de Servicio: ").append(this.tipoServicio)
                 .append("\n      | Mochila Térmica: ").append(this.tieneMochilaTermica ? "Sí" : "No")
                 .append("\n      | Capacidad Máx: ").append(this.capacidadPesoMax).append(" kg")
-                .append("\n      | Cerca de ubicación: ").append(this.estaCercaUbicacion ? "Sí" : "No");
-
+                .append("\n      | Cerca de ubicación: ").append(this.estaCercaUbicacion ? "Sí" : "No")
+                .append("\n      | Carga actual: ").append(this.pedidosAsignados.size()).append(" pedidos asignados");
         return sb.toString();
     }
 }

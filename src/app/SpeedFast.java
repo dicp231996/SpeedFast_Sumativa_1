@@ -25,12 +25,12 @@ public class SpeedFast {
         ControladorEnvios controlador = new ControladorEnvios();
 
         // =========================================================
-        // FASE 1: RESERVA Y ASIGNACIÓN (No hay despacho ni éxito aún)
+        // FASE 1: RESERVA Y ASIGNACIÓN MÚLTIPLE
         // =========================================================
         System.out.println("--- FASE 1: RESERVA DE PEDIDOS ---");
         System.out.println("1. Automática (El sistema evalúa y asigna bajo sus reglas)");
         System.out.println("2. Manual (El usuario elige entre los candidatos aptos)");
-        System.out.println("3. Nominal (Asignación por nombre de repartidor)");
+        System.out.println("3. Nominal (Asignación directa por nombre según rúbrica)");
         System.out.print("Seleccione el método de asignación: ");
 
         String tipoAsignacion = scanner.nextLine();
@@ -43,7 +43,10 @@ public class SpeedFast {
             if (esNominal) {
                 System.out.print("Ingrese el nombre exacto del repartidor para este pedido: ");
                 pedido.asignarRepartidor(scanner.nextLine());
-                // Ya no despachamos ni registramos éxito aquí
+                // Enlace bidireccional al comodín
+                if (pedido.getRepartidorAsignado() != null) {
+                    pedido.getRepartidorAsignado().agregarPedido(pedido);
+                }
                 continue;
             }
 
@@ -56,7 +59,8 @@ public class SpeedFast {
 
                 System.out.println("Candidatos disponibles:");
                 for (int i = 0; i < candidatosAptos.size(); i++) {
-                    System.out.println("  [" + i + "] " + candidatosAptos.get(i).getNombreCompleto());
+                    Repartidor r = candidatosAptos.get(i);
+                    System.out.println("  [" + i + "] " + r.getNombreCompleto() + " | Carga actual: " + r.getPedidosAsignados().size());
                 }
                 System.out.print("Ingrese el número del repartidor a reservar: ");
 
@@ -65,7 +69,9 @@ public class SpeedFast {
                     if (index >= 0 && index < candidatosAptos.size()) {
                         Repartidor seleccionado = candidatosAptos.get(index);
                         pedido.asignarRepartidor(seleccionado);
-                        listaRepartidores.remove(seleccionado);
+                        // Enlace bidireccional
+                        seleccionado.agregarPedido(pedido);
+                        // NOTA: Ya no lo removemos de la lista global, permitiendo múltiples asignaciones
                     }
                 } catch (Exception e) {
                     System.out.println("-> Entrada inválida. Omitiendo reserva.");
@@ -76,7 +82,10 @@ public class SpeedFast {
                     pedido.asignarRepartidor(candidato);
 
                     if (pedido.getRepartidorAsignado() != null) {
-                        listaRepartidores.remove(i);
+                        // Enlace bidireccional
+                        candidato.agregarPedido(pedido);
+                        // Ya no lo removemos, lo que significa que en automático el primero elegible
+                        // podría llevarse muchos pedidos (comportamiento de pool abierto).
                         break;
                     }
                 }
@@ -84,23 +93,22 @@ public class SpeedFast {
         }
 
         // =========================================================
-        // FASE 2: VERIFICACIÓN Y DESPACHO (Invocación exigida en rúbrica)
+        // FASE 2: VERIFICACIÓN Y DESPACHO
         // =========================================================
         System.out.println("\n=========================================");
         System.out.println("--- FASE 2: VERIFICACIÓN Y DESPACHO ---");
         System.out.println("=========================================");
 
         for (Pedido pedido : listaPedidos) {
-            // Solo despachamos los que lograron conseguir una reserva en la Fase 1
             if (pedido.getRepartidorAsignado() != null && !pedido.isCancelado()) {
-                pedido.mostrarResumen(); // Llama internamente a calcularTiempoEntrega()
-                pedido.despachar();      // Cambia el estado/imprime log de despacho
+                pedido.mostrarResumen();
+                pedido.despachar();
                 System.out.println("--------------------------------------------------");
             }
         }
 
         // =========================================================
-        // FASE 3: CONTINGENCIAS (Cancelación en ruta)
+        // FASE 3: GESTIÓN DE CANCELACIONES (Limpieza de mochila)
         // =========================================================
         System.out.println("\n=========================================");
         System.out.println("--- FASE 3: GESTIÓN DE CANCELACIONES ---");
@@ -124,7 +132,7 @@ public class SpeedFast {
                 break;
             }
 
-            System.out.print("\nIngrese ID a cancelar (o escriba 'FIN' para confirmar las entregas): ");
+            System.out.print("\nIngrese ID a cancelar (o escriba 'FIN' para iniciar las rutas): ");
             String input = scanner.nextLine();
 
             if (input.equalsIgnoreCase("FIN")) break;
@@ -143,9 +151,10 @@ public class SpeedFast {
 
                 Repartidor liberado = pedidoACancelar.cancelar(motivo);
 
-                if (liberado != null && !liberado.getTelefono().equals("N/A")) {
-                    listaRepartidores.add(liberado);
-                    System.out.println("-> Se reintegró al repartidor " + liberado.getNombreCompleto());
+                if (liberado != null) {
+                    // ¡CRÍTICO!: Debemos sacarle el pedido de la mochila al repartidor
+                    liberado.removerPedido(pedidoACancelar);
+                    System.out.println("-> Se retiró el pedido de la mochila de " + liberado.getNombreCompleto());
                 }
             } else {
                 System.out.println("-> Error: ID no encontrado.");
@@ -153,23 +162,38 @@ public class SpeedFast {
         }
 
         // =========================================================
-        // FASE 4: CONFIRMACIÓN DE ENTREGAS EXITOSAS
+        // FASE 4: EJECUCIÓN DE LAS RUTAS (SIMULACIÓN MULTIHILO)
         // =========================================================
-        // Solo los pedidos que sobrevivieron a la Fase 3 se registran como exitosos.
+        System.out.println("\n=========================================");
+        System.out.println("--- FASE 4: EJECUCIÓN DE ENTREGAS ---");
+        System.out.println("=========================================");
+
+        // 1. Identificamos qué repartidores tienen trabajo real asignado
+        ArrayList<Repartidor> repartidoresEnRuta = new ArrayList<>();
         for (Pedido p : listaPedidos) {
-            if (p.getRepartidorAsignado() != null && !p.isCancelado()) {
-                controlador.registrarEntregaExitosa(p);
+            Repartidor r = p.getRepartidorAsignado();
+            if (r != null && !repartidoresEnRuta.contains(r)) {
+                repartidoresEnRuta.add(r);
             }
         }
 
+        // 2. Despachamos a los repartidores
+        for (Repartidor r : repartidoresEnRuta) {
+            // Esto ejecuta la simulación multihilo que construiste para cada pedido de su mochila
+            r.run();
+        }
+
         // =========================================================
-        // FASE 5: RASTREO Y REPORTES
+        // FASE 5: CONFIRMACIÓN Y REPORTES
         // =========================================================
         System.out.println("\n=========================================");
         System.out.println("--- FASE 5: ESTADO GLOBAL Y RASTREO ---");
         System.out.println("=========================================");
 
         for (Pedido p : listaPedidos) {
+            if (p.getRepartidorAsignado() != null && !p.isCancelado()) {
+                controlador.registrarEntregaExitosa(p);
+            }
             System.out.println("Seguimiento ID " + p.getIdPedido() + " -> " + p.rastrear());
         }
 
