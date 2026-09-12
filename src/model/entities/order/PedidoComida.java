@@ -1,5 +1,6 @@
 package model.entities.order;
 
+import data.enumerate.EstadoPedido;
 import model.core.Pedido;
 import model.entities.dealer.Repartidor;
 
@@ -35,11 +36,16 @@ public class PedidoComida extends Pedido {
 
     // =========================================================
     // SOBREESCRITURA DE INTERFAZ: EXCEPCIÓN DE CANCELACIÓN
+    // Esta excepción NO devuelve el pedido a un pool de espera para una
+    // nueva asignación: es un desenlace terminal (repartidorAsignado queda
+    // en null y estadoCancelado en true de forma definitiva), por lo que
+    // corresponde reflejarlo con nuevoEstado(CANCELADO).
     // =========================================================
     @Override
     public Repartidor cancelar(String motivo) {
         this.estadoCancelado = true;
         this.motivoCancelacion = motivo;
+        this.nuevoEstado(EstadoPedido.CANCELADO);
 
         Repartidor liberado = this.repartidorAsignado;
         this.repartidorAsignado = null;

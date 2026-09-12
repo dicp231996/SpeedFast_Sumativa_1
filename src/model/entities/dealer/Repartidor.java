@@ -36,11 +36,15 @@ public class Repartidor extends Persona implements IRunnable, Runnable {
     }
 
     // =========================================================
-    // IMPLEMENTACIÓN SECUENCIAL (UN PEDIDO A LA VEZ)
+    // IMPLEMENTACIÓN SECUENCIAL POR REPARTIDOR (UN PEDIDO A LA VEZ),
+    // PERO CADA REPARTIDOR CORRE EN SU PROPIO HILO (ver GestorFases,
+    // que administra el pool de repartidores vía ExecutorService).
     // =========================================================
     @Override
     public void run() {
-        System.out.println("\n>>> [EN RUTA] El repartidor " + this.getNombreCompleto() + " inicia su recorrido secuencial.");
+        String nombreHilo = Thread.currentThread().getName();
+        System.out.println("\n>>> [EN RUTA - " + nombreHilo + "] El repartidor " + this.getNombreCompleto()
+                + " inicia su recorrido secuencial.");
 
         if (this.pedidosAsignados.isEmpty()) {
             System.out.println("    -> No hay pedidos asignados en la mochila.");
@@ -49,9 +53,19 @@ public class Repartidor extends Persona implements IRunnable, Runnable {
 
         for (Pedido pedido : this.pedidosAsignados) {
             if (!pedido.isCancelado()) {
-                // Al invocar .run() directamente sobre HiloEntrega, bloqueamos este ciclo for
-                // obligando a que se terminen las 4 etapas del pedido actual antes de pasar al siguiente.
-                new model.valueobjects.HiloEntrega(pedido).run();
+                // Cada pedido se procesa en un HILO REAL (HiloEntrega), pero se espera
+                // su finalización con join() antes de iniciar el siguiente pedido de la
+                // MISMA mochila. Esto preserva la secuencia interna del repartidor sin
+                // dejar de cumplir con el requisito de que HiloEntrega corra en su propio hilo.
+                Thread hiloEntrega = new Thread(new model.valueobjects.HiloEntrega(pedido),
+                        "Entrega-" + pedido.getIdPedido());
+                hiloEntrega.start();
+                try {
+                    hiloEntrega.join();
+                } catch (InterruptedException e) {
+                    System.err.println("-> Alerta: El recorrido de " + this.getNombreCompleto() + " fue interrumpido.");
+                    Thread.currentThread().interrupt();
+                }
             } else {
                 System.out.println("    -> Omitiendo pedido ID: " + pedido.getIdPedido() + " (Se encuentra CANCELADO).");
             }

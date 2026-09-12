@@ -1,5 +1,6 @@
 package model.core;
 
+import data.enumerate.EstadoPedido;
 import model.entities.dealer.Repartidor;
 import model.interfaces.ICancelable;
 import model.interfaces.IDespachable;
@@ -7,6 +8,11 @@ import model.interfaces.IRastreable;
 
 public abstract class Pedido implements IDespachable, ICancelable, IRastreable {
 
+    // Contador estático compartido por todas las instancias: genera el
+    // correlativo interno de manera automática cada vez que se crea un Pedido.
+    private static int contadorId = 1;
+
+    private final int id;
     private String idPedido;
     private String direccionEntrega;
     private String tipoPedido;
@@ -18,7 +24,11 @@ public abstract class Pedido implements IDespachable, ICancelable, IRastreable {
     protected boolean estadoCancelado;
     protected String motivoCancelacion;
 
+    // Estado operativo del pedido dentro de su ciclo de vida (PENDIENTE, EN_REPARTO, ENTREGADO)
+    protected EstadoPedido estado;
+
     public Pedido() {
+        this.id = contadorId++;
         this.idPedido = "GEN-0000";
         this.direccionEntrega = "Dirección no especificada";
         this.tipoPedido = "Estándar";
@@ -26,9 +36,11 @@ public abstract class Pedido implements IDespachable, ICancelable, IRastreable {
         this.repartidorAsignado = null;
         this.estadoCancelado = false;
         this.motivoCancelacion = "N/A";
+        this.estado = EstadoPedido.PENDIENTE;
     }
 
     public Pedido(String idPedido, String direccionEntrega, String tipoPedido, double distanciaKm) {
+        this.id = contadorId++;
         this.idPedido = idPedido;
         this.direccionEntrega = direccionEntrega;
         this.tipoPedido = tipoPedido;
@@ -36,13 +48,16 @@ public abstract class Pedido implements IDespachable, ICancelable, IRastreable {
         this.repartidorAsignado = null;
         this.estadoCancelado = false;
         this.motivoCancelacion = "N/A";
+        this.estado = EstadoPedido.PENDIENTE;
     }
 
+    public int getId() { return id; }
     public String getIdPedido() { return idPedido; }
     public String getDireccionEntrega() { return direccionEntrega; }
     public String getTipoPedido() { return tipoPedido; }
     public double getDistanciaKm() { return distanciaKm; }
     public Repartidor getRepartidorAsignado() { return repartidorAsignado; }
+    public EstadoPedido getEstado() { return estado; }
 
     public void setIdPedido(String idPedido) { this.idPedido = idPedido; }
     public void setDireccionEntrega(String direccionEntrega) { this.direccionEntrega = direccionEntrega; }
@@ -62,6 +77,7 @@ public abstract class Pedido implements IDespachable, ICancelable, IRastreable {
 
         if (validarRequisitos(candidato)) {
             this.repartidorAsignado = candidato;
+            this.nuevoEstado(EstadoPedido.EN_REPARTO);
             System.out.println("-> ÉXITO: Repartidor asignado correctamente.\n");
         } else {
             System.out.println("-> RECHAZADO: El repartidor no cumple con los requisitos del pedido.\n");
@@ -72,7 +88,30 @@ public abstract class Pedido implements IDespachable, ICancelable, IRastreable {
         System.out.println("Forzando asignación nominal para el pedido " + this.idPedido + "...");
         Repartidor comodin = new Repartidor(nombre, "N/A", data.enumerate.TipoServicio.COMIDA, true, 999.0, true);
         this.repartidorAsignado = comodin;
+        this.nuevoEstado(EstadoPedido.EN_REPARTO);
         System.out.println("-> ÉXITO: Asignado directamente al repartidor: " + nombre + "\n");
+    }
+
+    // =========================================================
+    // ACTUALIZACIÓN CONTROLADA DEL ESTADO DEL PEDIDO
+    // Punto único de entrada para ir avanzando el pedido a través de su
+    // ciclo de vida (PENDIENTE -> EN_REPARTO -> ENTREGADO) durante la
+    // ejecución del programa, dejando trazabilidad del cambio en consola.
+    // =========================================================
+    public void nuevoEstado(EstadoPedido estado) {
+        if (this.estado == estado) {
+            return; // Sin cambios reales, evitamos ruido en el log
+        }
+        System.out.println("-> [ESTADO] Pedido " + this.idPedido + ": " + this.estado.name() +
+                " => " + estado.name());
+        this.estado = estado;
+    }
+
+    // =========================================================
+    // MARCA EL PEDIDO COMO ENTREGADO (invocado al finalizar HiloEntrega)
+    // =========================================================
+    public void marcarEntregado() {
+        this.nuevoEstado(EstadoPedido.ENTREGADO);
     }
 
     // =========================================================
@@ -102,6 +141,7 @@ public abstract class Pedido implements IDespachable, ICancelable, IRastreable {
         if (this.repartidorAsignado == null) {
             this.estadoCancelado = true;
             this.motivoCancelacion = motivo;
+            this.nuevoEstado(EstadoPedido.CANCELADO);
             System.out.println("-> Pedido " + this.idPedido + " cancelado exitosamente antes de despacho.");
             return null;
         } else {
@@ -122,8 +162,9 @@ public abstract class Pedido implements IDespachable, ICancelable, IRastreable {
 
     public void mostrarResumen() {
         System.out.println("--- RESUMEN DEL PEDIDO ---");
-        System.out.println("ID: " + this.idPedido + " | Tipo: " + this.tipoPedido);
+        System.out.println("ID interno: " + this.id + " | ID: " + this.idPedido + " | Tipo: " + this.tipoPedido);
         System.out.println("Dirección: " + this.direccionEntrega);
+        System.out.println("Estado: " + this.estado);
         if (this.repartidorAsignado != null) {
             System.out.println("Tiempo estimado de entrega: " + calcularTiempoEntrega() + " minutos");
         }
